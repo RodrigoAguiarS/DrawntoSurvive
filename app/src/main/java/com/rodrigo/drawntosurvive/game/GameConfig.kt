@@ -1,0 +1,44 @@
+package com.rodrigo.drawntosurvive.game
+
+object GameConfig {
+    const val DEBUG_FAST_RUN = false
+    const val MATCH_DURATION_SECONDS = 600f
+    const val MAX_DELTA_TIME = 0.05f
+    const val PLAYER_INITIAL_HP = 100f
+    const val PLAYER_SPEED = 230f
+    const val PLAYER_COLLISION_RADIUS = 24f
+    const val PLAYER_VISUAL_SIZE = 92f
+    const val PICKUP_RADIUS = 34f
+    const val MAGNET_RADIUS = 145f
+    const val WEAPON_DAMAGE = 20f
+    const val WEAPON_COOLDOWN = 0.34f
+    const val MIN_WEAPON_COOLDOWN = 0.09f
+    const val PROJECTILE_SPEED = 720f
+    const val PROJECTILE_RANGE = 850f
+    const val PROJECTILE_RADIUS = 12f
+    const val PROJECTILE_COLLISION_PADDING = 5f
+    const val PROJECTILE_KNOCKBACK = 34f
+    const val DEATH_EFFECT_DURATION = 0.48f
+    const val WEAPON_OFFSET = 34f
+    const val MUZZLE_OFFSET = 66f
+    const val CRITICAL_CHANCE = 0.05f
+    const val CRITICAL_MULTIPLIER = 2f
+    const val SPECIAL_DAMAGE = 40f
+    const val SPECIAL_COOLDOWN = 12f
+    const val MIN_SPECIAL_COOLDOWN = 4f
+    const val SPECIAL_PROJECTILE_COUNT = 12
+    const val SPECIAL_PROJECTILE_SPEED = 620f
+    const val SPECIAL_PROJECTILE_RADIUS = 15f
+    const val INVULNERABILITY_TIME = 0.5f
+    const val ENEMY_SEPARATION_RADIUS_MULTIPLIER = 1.8f
+    const val ENEMY_SEPARATION_FORCE = 150f
+    const val MIN_JUMP_INTERVAL = 1.8f
+    const val MAX_JUMP_INTERVAL = 3.5f
+    const val ENEMY_JUMP_DURATION = 0.88f
+    const val INITIAL_SPAWN_INTERVAL = 1.15f
+    const val MIN_SPAWN_INTERVAL = 0.22f
+    const val SPAWN_MARGIN = 70f
+    const val XP_BASE_REQUIRED = 20
+    const val MAX_ENTITIES = 500
+    const val VICTORY_BONUS_COINS = 25
+}
