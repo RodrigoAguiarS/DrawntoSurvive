@@ -138,6 +138,14 @@ A arquitetura é organizada em apresentação, integração Android, domínio do
 - Prefira funções puras para matemática e cubra regras determinísticas com testes unitários.
 - Não silencie exceções novas sem uma estratégia explícita de fallback ou registro.
 
+## Formatação e indentação do código
+
+- Todo código criado ou alterado deve manter indentação consistente e seguir o estilo oficial da linguagem e os padrões já adotados no projeto.
+- Em Kotlin e nos scripts Gradle Kotlin DSL, use quatro espaços por nível de indentação; não use tabulações.
+- Formate blocos, argumentos, cadeias de chamadas e expressões longas para preservar hierarquia visual e legibilidade.
+- Não alinhe elementos com espaços manuais que possam se tornar inconsistentes após futuras alterações.
+- Antes de concluir, execute a formatação nos arquivos modificados e revise o diff para garantir que não haja mudanças de estilo acidentais ou fora do escopo.
+
 ## Critérios mínimos de conclusão
 
 Para mudanças de código, execute a partir da raiz:
