@@ -40,10 +40,13 @@ class SpriteStore private constructor(context: Context) {
         frame(hero, direction, if (moving) AnimationState.JUMP else AnimationState.IDLE, time)
 
     fun playerJump(direction: Direction8, progress: Float) =
-        jumpSequenceFrame(hero, direction, progress)
+        sequenceFrame(hero, direction, "jump", progress)
 
-    fun enemy(type: EnemyType, direction: Direction8, state: AnimationState, time: Float) =
-        frame(character(type), direction, state, time)
+    fun enemy(type: EnemyType, direction: Direction8, state: AnimationState, time: Float) = frame(
+        when (type) {
+            EnemyType.SLIME -> monster; EnemyType.FAST -> base; EnemyType.SKELETON -> skeleton
+        }, direction, state, time
+    )
 
     private fun character(type: EnemyType) = when (type) {
         EnemyType.SLIME -> monster; EnemyType.FAST -> base; EnemyType.SKELETON -> skeleton
@@ -56,12 +59,13 @@ class SpriteStore private constructor(context: Context) {
     private fun flipsLeft(direction: Direction8) =
         direction in setOf(Direction8.WEST, Direction8.NORTH_WEST, Direction8.SOUTH_WEST)
 
-    private fun jumpSequenceFrame(
+    private fun sequenceFrame(
         map: Map<String, List<Bitmap>>,
         direction: Direction8,
+        state: String,
         progress: Float
     ): Pair<Bitmap?, Boolean> {
-        val frames = map["jump_${directionKey(direction)}"].orEmpty();
+        val frames = map["${state}_${directionKey(direction)}"].orEmpty();
         val index = (progress.coerceIn(0f, .999f) * frames.size).toInt(); return frames.getOrNull(
             index
         ) to flipsLeft(direction)

@@ -4,8 +4,6 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.*
 import android.view.*
-import androidx.core.graphics.withRotation
-import androidx.core.graphics.withTranslation
 import kotlin.math.atan2
 import kotlin.math.ceil
 import kotlin.math.sin
@@ -51,7 +49,7 @@ class GameView(context: Context, val engine: GameEngine, val controls: TouchCont
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent) = controls.onTouch(event)
-
+    fun pauseGame() = engine.pause()
     private fun drawFrame() {
         if (!holder.surface.isValid) return;
         val c = try {
@@ -79,7 +77,11 @@ class GameView(context: Context, val engine: GameEngine, val controls: TouchCont
             )
         }
         for (p in engine.projectiles) if (p.active) {
-            drawProjectile(c, p)
+            paint.color = if (p.critical) Color.YELLOW else Color.rgb(
+                255,
+                111,
+                30
+            ); c.drawCircle(p.position.x, p.position.y, p.radius, paint)
         }
         for (effect in engine.deathEffects) {
             val frames = sprites.deathFrames; if (frames.isNotEmpty()) {
@@ -157,32 +159,6 @@ class GameView(context: Context, val engine: GameEngine, val controls: TouchCont
         )
     }
 
-    private fun drawProjectile(c: Canvas, projectile: Projectile) {
-        val bullet = sprites.bullet
-        if (bullet == null) {
-            paint.color = if (projectile.critical) Color.YELLOW else Color.rgb(255, 111, 30)
-            c.drawCircle(projectile.position.x, projectile.position.y, projectile.radius, paint)
-            return
-        }
-
-        val size = projectile.radius * 2f
-        dst.set(
-            projectile.position.x - size,
-            projectile.position.y - size,
-            projectile.position.x + size,
-            projectile.position.y + size
-        )
-        c.drawBitmap(bullet, null, dst, paint)
-
-        if (projectile.critical) {
-            paint.color = Color.argb(150, 255, 235, 80)
-            paint.style = Paint.Style.STROKE
-            paint.strokeWidth = 2f * density
-            c.drawCircle(projectile.position.x, projectile.position.y, size * .55f, paint)
-            paint.style = Paint.Style.FILL
-        }
-    }
-
     private fun drawSprite(c: Canvas, b: Bitmap?, pos: Vector2, size: Float, flip: Boolean) {
         if (b == null) {
             paint.color = Color.MAGENTA; c.drawCircle(pos.x, pos.y, size * .3f, paint); return
@@ -212,23 +188,18 @@ class GameView(context: Context, val engine: GameEngine, val controls: TouchCont
         val p = engine.player;
         val d = p.facingDirection.normalized();
         val angle = Math.toDegrees(atan2(d.y.toDouble(), d.x.toDouble())).toFloat();
-        val wp = playerVisualPosition() + d * GameConfig.WEAPON_OFFSET
-        c.withTranslation(wp.x, wp.y) {
-            withRotation(angle) {
-                val b = sprites.gun
-                if (b != null) {
-                    drawBitmap(
-                        b,
-                        null,
-                        RectF(-12f * density, -22f * density, 58f * density, 22f * density),
-                        paint
-                    )
-                } else {
-                    paint.color = Color.DKGRAY
-                    drawRect(0f, -5f, 55f, 5f, paint)
-                }
-            }
-        }
+        val wp = playerVisualPosition() + d * GameConfig.WEAPON_OFFSET; c.save(); c.translate(
+            wp.x,
+            wp.y
+        ); c.rotate(angle);
+        val b = sprites.gun; if (b != null) c.drawBitmap(
+            b,
+            null,
+            RectF(-12f * density, -22f * density, 58f * density, 22f * density),
+            paint
+        ) else {
+            paint.color = Color.DKGRAY; c.drawRect(0f, -5f, 55f, 5f, paint)
+        }; c.restore()
     }
 
     private fun drawSpecialEffect(c: Canvas) {
@@ -266,19 +237,14 @@ class GameView(context: Context, val engine: GameEngine, val controls: TouchCont
             15f * density * scale,
             8f * density * scale
         ); muzzleFlashPath.close()
-        c.withTranslation(pos.x, pos.y) {
-            withRotation(angle) {
-                paint.color = Color.rgb(255, 174, 0)
-                drawPath(muzzleFlashPath, paint)
-                paint.color = Color.rgb(255, 244, 92)
-                drawCircle(
-                    5f * density,
-                    0f,
-                    7f * density * scale,
-                    paint
-                )
-            }
-        }
+        c.save(); c.translate(pos.x, pos.y); c.rotate(angle); paint.color =
+            Color.rgb(255, 174, 0); c.drawPath(muzzleFlashPath, paint); paint.color =
+            Color.rgb(255, 244, 92); c.drawCircle(
+            5f * density,
+            0f,
+            7f * density * scale,
+            paint
+        ); c.restore()
     }
 
     private fun drawControls(c: Canvas) {
