@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.withTranslation
 import com.rodrigo.drawntosurvive.game.*
 import kotlinx.coroutines.isActive
 import kotlin.math.PI
@@ -196,12 +197,16 @@ private fun drawIntroWeapon(
         )) else 0f
     val wx = cx + 30f * d - recoil;
     val wy = cy + 26f * d
-    c.save(); c.translate(wx, wy); if (gun != null) c.drawBitmap(
-        gun,
-        null,
-        RectF(-12f * d, -22f * d, 58f * d, 22f * d),
-        paint
-    ); c.restore()
+    c.withTranslation(wx, wy) {
+        if (gun != null) {
+            drawBitmap(
+                gun,
+                null,
+                RectF(-12f * d, -22f * d, 58f * d, 22f * d),
+                paint
+            )
+        }
+    }
     if (elapsed in SHOOT_START..SHOOT_END) {
         val muzzleX = wx + 58f * d; if (((elapsed - SHOOT_START) % .24f) < .09f) drawFlash(
             c,
