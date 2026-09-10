@@ -9,6 +9,16 @@ class GameLogicTest {
  @Test fun direction8(){assertEquals(Direction8.EAST,Direction8.from(Vector2(1f,0f)));assertEquals(Direction8.NORTH_WEST,Direction8.from(Vector2(-1f,-1f)))}
  @Test fun collision(){assertTrue(GameMath.circlesCollide(Vector2(),10f,Vector2(19f,0f),10f));assertFalse(GameMath.circlesCollide(Vector2(),10f,Vector2(21f,0f),10f))}
  @Test fun sweptProjectileCollision(){assertTrue(GameMath.segmentHitsCircle(Vector2(0f,0f),Vector2(100f,0f),Vector2(50f,4f),8f));assertFalse(GameMath.segmentHitsCircle(Vector2(0f,0f),Vector2(100f,0f),Vector2(50f,20f),8f))}
+ @Test fun primitiveSweptProjectileCollisionMatchesVectorApi(){
+  val start=Vector2(0f,0f);val end=Vector2(100f,0f);val center=Vector2(50f,4f)
+  assertEquals(GameMath.segmentHitsCircle(start,end,center,8f),GameMath.segmentHitsCircle(start.x,start.y,end.x,end.y,center.x,center.y,8f))
+  assertFalse(GameMath.segmentHitsCircle(0f,0f,100f,0f,50f,20f,8f))
+ }
+ @Test fun spatialGridReturnsOnlyEnemiesFromIntersectedCells(){
+  val enemies=listOf(Enemy(Vector2(20f,20f),EnemyType.SLIME),Enemy(Vector2(180f,20f),EnemyType.FAST),Enemy(Vector2(20f,180f),EnemyType.SKELETON))
+  val grid=SpatialGrid(64f);grid.rebuild(enemies,256f,256f,0f);val found=mutableSetOf<Int>();grid.forEachNearby(20f,20f,20f){found+=it}
+  assertEquals(setOf(0),found)
+ }
  @Test fun spread(){assertEquals(listOf(-10f,0f,10f),GameMath.spreadAngles(3));assertEquals(listOf(-5f,5f),GameMath.spreadAngles(2))}
  @Test fun radial(){val d=GameMath.radialDirections(12);assertEquals(12,d.size);assertEquals(1f,d[0].x,.001f);assertEquals(1f,d[3].y,.001f)}
  @Test fun progression(){assertEquals(20,GameMath.xpRequired(1));assertEquals(44,GameMath.xpRequired(3));assertEquals(4,GameMath.coins(20,false));assertEquals(29,GameMath.coins(20,true));assertEquals(GameConfig.MIN_SPAWN_INTERVAL,GameMath.spawnInterval(600f),.001f)}

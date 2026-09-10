@@ -37,6 +37,8 @@ object GameConfig {
     const val INVULNERABILITY_TIME = 0.5f
     const val ENEMY_SEPARATION_RADIUS_MULTIPLIER = 1.8f
     const val ENEMY_SEPARATION_FORCE = 150f
+    const val SPATIAL_GRID_CELL_SIZE = 96f
+    const val MAX_ENEMIES = 220
     const val MIN_JUMP_INTERVAL = 1.8f
     const val MAX_JUMP_INTERVAL = 3.5f
     const val ENEMY_JUMP_DURATION = 0.88f
@@ -44,6 +46,7 @@ object GameConfig {
     const val MIN_SPAWN_INTERVAL = 0.22f
     const val SPAWN_MARGIN = 70f
     const val XP_BASE_REQUIRED = 20
+    const val UI_PUBLISH_INTERVAL = 0.25f
     const val MAX_ENTITIES = 500
     const val VICTORY_BONUS_COINS = 25
 }

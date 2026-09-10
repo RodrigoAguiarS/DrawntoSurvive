@@ -18,9 +18,11 @@ enum class Direction8 {
     NORTH, NORTH_EAST, EAST, SOUTH_EAST, SOUTH, SOUTH_WEST, WEST, NORTH_WEST;
 
     companion object {
-        fun from(vector: Vector2): Direction8 {
-            if (vector.lengthSquared() < 0.0001f) return SOUTH
-            var degrees = Math.toDegrees(atan2(vector.y.toDouble(), vector.x.toDouble())).toFloat()
+        fun from(vector: Vector2) = from(vector.x, vector.y)
+
+        fun from(x: Float, y: Float): Direction8 {
+            if (x * x + y * y < 0.0001f) return SOUTH
+            var degrees = Math.toDegrees(atan2(y.toDouble(), x.toDouble())).toFloat()
             if (degrees < 0) degrees += 360f
             return when {
                 degrees < 22.5f || degrees >= 337.5f -> EAST
@@ -44,14 +46,32 @@ object GameMath {
         return dx * dx + dy * dy <= sum * sum
     }
 
-    fun segmentHitsCircle(start: Vector2, end: Vector2, center: Vector2, radius: Float): Boolean {
-        val segment = end - start;
-        val lengthSquared = segment.lengthSquared()
-        if (lengthSquared < 0.0001f) return circlesCollide(start, 0f, center, radius)
-        val toCenter = center - start
-        val t = ((toCenter.x * segment.x + toCenter.y * segment.y) / lengthSquared).coerceIn(0f, 1f)
-        val closest = start + segment * t
-        return circlesCollide(closest, 0f, center, radius)
+    fun segmentHitsCircle(start: Vector2, end: Vector2, center: Vector2, radius: Float) =
+        segmentHitsCircle(start.x, start.y, end.x, end.y, center.x, center.y, radius)
+
+    fun segmentHitsCircle(
+        startX: Float,
+        startY: Float,
+        endX: Float,
+        endY: Float,
+        centerX: Float,
+        centerY: Float,
+        radius: Float
+    ): Boolean {
+        val segmentX = endX - startX
+        val segmentY = endY - startY
+        val lengthSquared = segmentX * segmentX + segmentY * segmentY
+        if (lengthSquared < 0.0001f) {
+            val dx = startX - centerX
+            val dy = startY - centerY
+            return dx * dx + dy * dy <= radius * radius
+        }
+        val toCenterX = centerX - startX
+        val toCenterY = centerY - startY
+        val t = ((toCenterX * segmentX + toCenterY * segmentY) / lengthSquared).coerceIn(0f, 1f)
+        val dx = startX + segmentX * t - centerX
+        val dy = startY + segmentY * t - centerY
+        return dx * dx + dy * dy <= radius * radius
     }
 
     fun directionFromDegrees(degrees: Float): Vector2 {

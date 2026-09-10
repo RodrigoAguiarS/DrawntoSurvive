@@ -18,6 +18,7 @@ class GameView(context: Context, val engine: GameEngine, val controls: TouchCont
     private val backgroundSrc = Rect();
     private val backgroundDst = RectF();
     private val muzzleFlashPath = Path();
+    private val playerVisualPosition = Vector2()
     private val density = resources.displayMetrics.density
 
     init {
@@ -53,9 +54,13 @@ class GameView(context: Context, val engine: GameEngine, val controls: TouchCont
     private fun drawFrame() {
         if (!holder.surface.isValid) return;
         val c = try {
-            holder.lockCanvas()
+            holder.lockHardwareCanvas()
         } catch (_: Exception) {
-            null
+            try {
+                holder.lockCanvas()
+            } catch (_: Exception) {
+                null
+            }
         } ?: return; try {
             render(c)
         } finally {
@@ -68,7 +73,7 @@ class GameView(context: Context, val engine: GameEngine, val controls: TouchCont
 
     private fun render(c: Canvas) {
         drawBackground(c)
-        for (o in engine.orbs) if (o.active) {
+        for (o in engine.orbs) if (o.active && isVisible(o.position.x, o.position.y, o.radius)) {
             paint.color = Color.rgb(62, 230, 170); c.drawCircle(
                 o.position.x,
                 o.position.y,
@@ -76,7 +81,7 @@ class GameView(context: Context, val engine: GameEngine, val controls: TouchCont
                 paint
             )
         }
-        for (p in engine.projectiles) if (p.active) {
+        for (p in engine.projectiles) if (p.active && isVisible(p.position.x, p.position.y, p.radius)) {
             paint.color = if (p.critical) Color.YELLOW else Color.rgb(
                 255,
                 111,
@@ -84,6 +89,7 @@ class GameView(context: Context, val engine: GameEngine, val controls: TouchCont
             ); c.drawCircle(p.position.x, p.position.y, p.radius, paint)
         }
         for (effect in engine.deathEffects) {
+            if (!isVisible(effect.position.x, effect.position.y, 55f * density)) continue
             val frames = sprites.deathFrames; if (frames.isNotEmpty()) {
                 val progress = (effect.elapsed / effect.duration).coerceIn(0f, .999f);
                 val frame = frames[(progress * frames.size).toInt()]; drawSprite(
@@ -95,9 +101,10 @@ class GameView(context: Context, val engine: GameEngine, val controls: TouchCont
                 )
             }
         }
-        for (e in engine.enemies) if (e.active) {
-            val direction =
-                Direction8.from(engine.player.position - e.position); val (frame, flip) = sprites.enemy(
+        for (e in engine.enemies) if (e.active && isVisible(e.position.x, e.position.y, 41f * density)) {
+            val directionX = engine.player.position.x - e.position.x
+            val directionY = engine.player.position.y - e.position.y
+            val direction = Direction8.from(directionX, directionY); val (frame, flip) = sprites.enemy(
                 e.type,
                 direction,
                 e.animationState,
@@ -129,6 +136,9 @@ class GameView(context: Context, val engine: GameEngine, val controls: TouchCont
             c
         ); drawControls(c)
     }
+
+    private fun isVisible(x: Float, y: Float, margin: Float) =
+        x + margin >= 0f && x - margin <= width && y + margin >= 0f && y - margin <= height
 
     private fun drawBackground(c: Canvas) {
         val b = sprites.background; if (b == null) {
@@ -173,15 +183,18 @@ class GameView(context: Context, val engine: GameEngine, val controls: TouchCont
     }
 
     private fun playerVisualPosition(): Vector2 {
-        val p = engine.player.position; if (engine.specialAnimationTimer <= 0f) return p;
+        val p = engine.player.position
+        playerVisualPosition.x = p.x
+        playerVisualPosition.y = p.y
+        if (engine.specialAnimationTimer <= 0f) return playerVisualPosition
         val progress =
             ((GameConfig.SPECIAL_ANIMATION_DURATION - engine.specialAnimationTimer) / GameConfig.SPECIAL_ANIMATION_DURATION).coerceIn(
                 0f,
                 1f
-            ); return Vector2(
-            p.x,
-            p.y - sin(progress * Math.PI).toFloat() * GameConfig.SPECIAL_JUMP_HEIGHT * density
-        )
+            )
+        playerVisualPosition.y -=
+            sin(progress * Math.PI).toFloat() * GameConfig.SPECIAL_JUMP_HEIGHT * density
+        return playerVisualPosition
     }
 
     private fun drawWeapon(c: Canvas) {

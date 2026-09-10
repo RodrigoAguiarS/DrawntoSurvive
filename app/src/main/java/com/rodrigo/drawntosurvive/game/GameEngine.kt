@@ -16,6 +16,7 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
     val deathEffects = mutableListOf<DeathEffect>()
     private val commands = ConcurrentLinkedQueue<GameCommand>();
     private val levels = mutableMapOf<UpgradeType, Int>()
+    private val enemyGrid = SpatialGrid(GameConfig.SPATIAL_GRID_CELL_SIZE)
     private val _ui = MutableStateFlow(GameUiState());
     val ui: StateFlow<GameUiState> = _ui
     var state = GameState.RUNNING; private set;
@@ -65,17 +66,23 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
         spawnClock -= dt; if (spawnClock <= 0f) {
             spawn(); spawnClock = GameMath.spawnInterval(elapsed)
         }
-        updateEnemies(dt); updateProjectiles(dt); collisions(); updateOrbs(dt); updateDeathEffects(
-            dt
-        )
+        rebuildEnemyGrid()
+        updateEnemies(dt)
+        rebuildEnemyGrid()
+        updateProjectiles(dt)
+        collisions()
+        updateOrbs(dt)
+        updateDeathEffects(dt)
         if (player.healthRegenPerSecond > 0) player.currentHp =
             min(player.maxHp, player.currentHp + player.healthRegenPerSecond * dt)
-        enemies.removeAll { !it.active }; projectiles.removeAll { !it.active }; orbs.removeAll { !it.active }; deathEffects.removeAll { it.elapsed >= it.duration }
+        removeInactiveEntities()
         if (player.currentHp <= 0) finish(false) else if (elapsed >= GameConfig.MATCH_DURATION_SECONDS) finish(
             true
         )
-        uiClock -= dt; if (uiClock <= 0) {
-            publish(); uiClock = .08f
+        uiClock -= dt
+        if (uiClock <= 0f) {
+            publishIfChanged()
+            uiClock = GameConfig.UI_PUBLISH_INTERVAL
         }
     }
 
@@ -142,7 +149,7 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
     }
 
     private fun spawn() {
-        if (enemies.size >= 220) return;
+        if (enemies.size >= GameConfig.MAX_ENEMIES) return;
         val count = if (elapsed > 360) 2 else 1; repeat(count) {
             val side = Random.nextInt(4);
             val m = GameConfig.SPAWN_MARGIN;
@@ -181,25 +188,35 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
             }
         }
         for (i in 0 until count) {
-            val a = enemies[i]; if (!a.active) continue; for (j in i + 1 until count) {
-                val b = enemies[j]; if (!b.active) continue
-                var dx = a.position.x - b.position.x;
-                var dy = a.position.y - b.position.y;
+            val a = enemies[i]
+            if (!a.active) continue
+            val searchRadius =
+                (a.type.radius + MAX_ENEMY_RADIUS) * GameConfig.ENEMY_SEPARATION_RADIUS_MULTIPLIER
+            enemyGrid.forEachNearby(a.position.x, a.position.y, searchRadius) { j ->
+                if (j <= i) return@forEachNearby
+                val b = enemies[j]
+                if (!b.active) return@forEachNearby
+                var dx = a.position.x - b.position.x
+                var dy = a.position.y - b.position.y
                 val desired =
-                    (a.type.radius + b.type.radius) * GameConfig.ENEMY_SEPARATION_RADIUS_MULTIPLIER;
-                val desiredSq = desired * desired;
+                    (a.type.radius + b.type.radius) * GameConfig.ENEMY_SEPARATION_RADIUS_MULTIPLIER
+                val desiredSq = desired * desired
                 var distanceSq = dx * dx + dy * dy
-                if (distanceSq < desiredSq) {
-                    if (distanceSq < 0.0001f) {
-                        val angle = ((i * 31 + j * 17) % 360) * PI.toFloat() / 180f; dx =
-                            cos(angle); dy = sin(angle); distanceSq = 1f
-                    };
-                    val distance = sqrt(distanceSq);
-                    val strength = (desired - distance) / desired;
-                    val nx = dx / distance;
-                    val ny =
-                        dy / distance; a.separationX += nx * strength; a.separationY += ny * strength; b.separationX -= nx * strength; b.separationY -= ny * strength
+                if (distanceSq >= desiredSq) return@forEachNearby
+                if (distanceSq < 0.0001f) {
+                    val angle = ((i * 31 + j * 17) % 360) * PI.toFloat() / 180f
+                    dx = cos(angle)
+                    dy = sin(angle)
+                    distanceSq = 1f
                 }
+                val distance = sqrt(distanceSq)
+                val strength = (desired - distance) / desired
+                val nx = dx / distance
+                val ny = dy / distance
+                a.separationX += nx * strength
+                a.separationY += ny * strength
+                b.separationX -= nx * strength
+                b.separationY -= ny * strength
             }
         }
         for (e in enemies) if (e.active) {
@@ -220,47 +237,111 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
 
     private fun updateProjectiles(dt: Float) {
         for (p in projectiles) if (p.active) {
-            p.previousPosition = p.position.copy();
-            val dist =
-                p.speed * dt; p.position.x += p.direction.x * dist; p.position.y += p.direction.y * dist; p.distanceTraveled += dist; if (p.distanceTraveled >= p.maxDistance) p.active =
-                false
+            p.previousPosition.x = p.position.x
+            p.previousPosition.y = p.position.y
+            val dist = p.speed * dt
+            p.position.x += p.direction.x * dist
+            p.position.y += p.direction.y * dist
+            p.distanceTraveled += dist
+            if (p.distanceTraveled >= p.maxDistance) p.active = false
         }
     }
 
     private fun collisions() {
-        for (p in projectiles) if (p.active) for (e in enemies) if (e.active && GameMath.segmentHitsCircle(
-                p.previousPosition,
-                p.position,
-                e.position,
-                e.type.radius + p.radius + GameConfig.PROJECTILE_COLLISION_PADDING
-            )
-        ) {
-            e.hp -= p.damage; p.active = false; e.position.x =
-                (e.position.x + p.direction.x * GameConfig.PROJECTILE_KNOCKBACK).coerceIn(
-                    -GameConfig.SPAWN_MARGIN,
-                    width + GameConfig.SPAWN_MARGIN
-                ); e.position.y =
-                (e.position.y + p.direction.y * GameConfig.PROJECTILE_KNOCKBACK).coerceIn(
-                    -GameConfig.SPAWN_MARGIN,
-                    height + GameConfig.SPAWN_MARGIN
-                ); if (e.hp <= 0) {
-                e.active =
-                    false; kills++; deathEffects += DeathEffect(e.position.copy()); orbs += ExperienceOrb(
-                    e.position.copy(),
-                    e.type.xp
-                )
-            }; break
+        for (p in projectiles) {
+            if (!p.active) continue
+            val padding = p.radius + GameConfig.PROJECTILE_COLLISION_PADDING + MAX_ENEMY_RADIUS
+            val minX = min(p.previousPosition.x, p.position.x) - padding
+            val minY = min(p.previousPosition.y, p.position.y) - padding
+            val maxX = max(p.previousPosition.x, p.position.x) + padding
+            val maxY = max(p.previousPosition.y, p.position.y) + padding
+            var hitIndex = -1
+            enemyGrid.forEachInBounds(minX, minY, maxX, maxY) { index ->
+                if (hitIndex >= 0 && index >= hitIndex) return@forEachInBounds
+                val enemy = enemies[index]
+                if (!enemy.active) return@forEachInBounds
+                val hitRadius =
+                    enemy.type.radius + p.radius + GameConfig.PROJECTILE_COLLISION_PADDING
+                if (GameMath.segmentHitsCircle(
+                        p.previousPosition.x,
+                        p.previousPosition.y,
+                        p.position.x,
+                        p.position.y,
+                        enemy.position.x,
+                        enemy.position.y,
+                        hitRadius
+                    )
+                ) {
+                    hitIndex = index
+                }
+            }
+            if (hitIndex >= 0) hitEnemy(p, enemies[hitIndex])
         }
-        if (player.invulnerability <= 0f) for (e in enemies) if (e.active && GameMath.circlesCollide(
-                player.position,
-                GameConfig.PLAYER_COLLISION_RADIUS,
-                e.position,
-                e.type.radius
-            )
-        ) {
-            player.currentHp -= e.type.damage; player.invulnerability =
-                GameConfig.INVULNERABILITY_TIME; break
+        if (player.invulnerability <= 0f) {
+            val searchRadius = GameConfig.PLAYER_COLLISION_RADIUS + MAX_ENEMY_RADIUS
+            var hitIndex = -1
+            enemyGrid.forEachNearby(player.position.x, player.position.y, searchRadius) { index ->
+                if (hitIndex >= 0 && index >= hitIndex) return@forEachNearby
+                val enemy = enemies[index]
+                if (enemy.active && GameMath.circlesCollide(
+                        player.position,
+                        GameConfig.PLAYER_COLLISION_RADIUS,
+                        enemy.position,
+                        enemy.type.radius
+                    )
+                ) {
+                    hitIndex = index
+                }
+            }
+            if (hitIndex >= 0) {
+                player.currentHp -= enemies[hitIndex].type.damage
+                player.invulnerability = GameConfig.INVULNERABILITY_TIME
+            }
         }
+    }
+
+    private fun hitEnemy(projectile: Projectile, enemy: Enemy) {
+        enemy.hp -= projectile.damage
+        projectile.active = false
+        enemy.position.x =
+            (enemy.position.x + projectile.direction.x * GameConfig.PROJECTILE_KNOCKBACK).coerceIn(
+                -GameConfig.SPAWN_MARGIN,
+                width + GameConfig.SPAWN_MARGIN
+            )
+        enemy.position.y =
+            (enemy.position.y + projectile.direction.y * GameConfig.PROJECTILE_KNOCKBACK).coerceIn(
+                -GameConfig.SPAWN_MARGIN,
+                height + GameConfig.SPAWN_MARGIN
+            )
+        if (enemy.hp <= 0f) {
+            enemy.active = false
+            kills++
+            deathEffects += DeathEffect(enemy.position.copy())
+            orbs += ExperienceOrb(enemy.position.copy(), enemy.type.xp)
+        }
+    }
+
+    private fun rebuildEnemyGrid() {
+        enemyGrid.rebuild(enemies, width, height, GameConfig.SPAWN_MARGIN)
+    }
+
+    private fun removeInactiveEntities() {
+        removeIf(enemies) { !it.active }
+        removeIf(projectiles) { !it.active }
+        removeIf(orbs) { !it.active }
+        removeIf(deathEffects) { it.elapsed >= it.duration }
+    }
+
+    private inline fun <T> removeIf(items: MutableList<T>, predicate: (T) -> Boolean) {
+        var writeIndex = 0
+        for (readIndex in items.indices) {
+            val item = items[readIndex]
+            if (!predicate(item)) {
+                if (writeIndex != readIndex) items[writeIndex] = item
+                writeIndex++
+            }
+        }
+        if (writeIndex < items.size) items.subList(writeIndex, items.size).clear()
     }
 
     private fun updateDeathEffects(dt: Float) {
@@ -375,7 +456,16 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
             if (resultSent) GameMath.coins(kills, state == GameState.VICTORY) else 0
         )
 
+    private fun publishIfChanged() {
+        val next = snapshot()
+        if (next != _ui.value) _ui.value = next
+    }
+
     private fun publish() {
         _ui.value = snapshot()
+    }
+
+    private companion object {
+        val MAX_ENEMY_RADIUS = EnemyType.entries.maxOf { it.radius }
     }
 }

@@ -5,6 +5,10 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 
 class SpriteStore private constructor(context: Context) {
+    data class SpriteFrame(val bitmap: Bitmap?, val flip: Boolean)
+
+    private class CharacterSprites(val frames: Array<Array<List<SpriteFrame>>>)
+
     private val assets = context.assets
     val background = load("images/cenario.png")
     val gun = load("images/Sprites/gun.png");
@@ -21,19 +25,26 @@ class SpriteStore private constructor(context: Context) {
         null
     }
 
-    private fun loadCharacter(folder: String): Map<String, List<Bitmap>> {
-        val result = mutableMapOf<String, List<Bitmap>>(); for (dir in listOf(
-            "down",
-            "down_right",
-            "right",
-            "up_right",
-            "up"
-        )) {
-            for (state in listOf("idle", "jump")) {
-                val count = if (state == "idle") 4 else 8; result["${state}_$dir"] =
-                    (1..count).mapNotNull { load("images/Sprites/$folder/${state}_$dir ($it).png") }
+    private fun loadCharacter(folder: String): CharacterSprites {
+        val directionFolders = arrayOf("up", "up_right", "right", "down_right", "down")
+        val states = arrayOf("idle", "jump")
+        val sourceFrames = Array(states.size) { stateIndex ->
+            Array(directionFolders.size) { directionIndex ->
+                val count = if (stateIndex == IDLE_INDEX) 4 else 8
+                (1..count).mapNotNull {
+                    load("images/Sprites/$folder/${states[stateIndex]}_${directionFolders[directionIndex]} ($it).png")
+                }
             }
-        }; return result
+        }
+        val frames = Array(states.size) { stateIndex ->
+            Array(Direction8.entries.size) { directionOrdinal ->
+                val direction = Direction8.entries[directionOrdinal]
+                sourceFrames[stateIndex][directionIndex(direction)].map {
+                    SpriteFrame(it, flipsLeft(direction))
+                }
+            }
+        }
+        return CharacterSprites(frames)
     }
 
     fun player(direction: Direction8, moving: Boolean, time: Float) =
@@ -52,40 +63,50 @@ class SpriteStore private constructor(context: Context) {
         EnemyType.SLIME -> monster; EnemyType.FAST -> base; EnemyType.SKELETON -> skeleton
     }
 
-    private fun directionKey(direction: Direction8) = when (direction) {
-        Direction8.NORTH -> "up"; Direction8.NORTH_EAST, Direction8.NORTH_WEST -> "up_right"; Direction8.EAST, Direction8.WEST -> "right"; Direction8.SOUTH_EAST, Direction8.SOUTH_WEST -> "down_right"; Direction8.SOUTH -> "down"
+    private fun directionIndex(direction: Direction8) = when (direction) {
+        Direction8.NORTH -> 0
+        Direction8.NORTH_EAST, Direction8.NORTH_WEST -> 1
+        Direction8.EAST, Direction8.WEST -> 2
+        Direction8.SOUTH_EAST, Direction8.SOUTH_WEST -> 3
+        Direction8.SOUTH -> 4
     }
 
-    private fun flipsLeft(direction: Direction8) =
-        direction in setOf(Direction8.WEST, Direction8.NORTH_WEST, Direction8.SOUTH_WEST)
+    private fun flipsLeft(direction: Direction8) = when (direction) {
+        Direction8.WEST, Direction8.NORTH_WEST, Direction8.SOUTH_WEST -> true
+        else -> false
+    }
 
     private fun sequenceFrame(
-        map: Map<String, List<Bitmap>>,
+        sprites: CharacterSprites,
         direction: Direction8,
         state: String,
         progress: Float
-    ): Pair<Bitmap?, Boolean> {
-        val frames = map["${state}_${directionKey(direction)}"].orEmpty();
-        val index = (progress.coerceIn(0f, .999f) * frames.size).toInt(); return frames.getOrNull(
-            index
-        ) to flipsLeft(direction)
+    ): SpriteFrame {
+        val stateIndex = if (state == "jump") JUMP_INDEX else IDLE_INDEX
+        val frames = sprites.frames[stateIndex][direction.ordinal]
+        val index = (progress.coerceIn(0f, .999f) * frames.size).toInt()
+        return frames.getOrNull(index) ?: EMPTY_FRAME
     }
 
     private fun frame(
-        map: Map<String, List<Bitmap>>,
+        sprites: CharacterSprites,
         direction: Direction8,
         state: AnimationState,
         time: Float
-    ): Pair<Bitmap?, Boolean> {
-        val assetState = if (state == AnimationState.JUMP) "jump" else "idle";
-        val frames =
-            map["${assetState}_${directionKey(direction)}"].orEmpty(); return (frames.getOrNull(
-            (time * (if (state == AnimationState.JUMP) 9 else 5)).toInt()
-                .coerceAtLeast(0) % frames.size.coerceAtLeast(1)
-        ) to flipsLeft(direction))
+    ): SpriteFrame {
+        val stateIndex = if (state == AnimationState.JUMP) JUMP_INDEX else IDLE_INDEX
+        val frames = sprites.frames[stateIndex][direction.ordinal]
+        val frameIndex =
+            (time * (if (state == AnimationState.JUMP) 9 else 5)).toInt().coerceAtLeast(0) %
+                frames.size.coerceAtLeast(1)
+        return frames.getOrNull(frameIndex) ?: EMPTY_FRAME
     }
 
     companion object {
+        private const val IDLE_INDEX = 0
+        private const val JUMP_INDEX = 1
+        private val EMPTY_FRAME = SpriteFrame(null, false)
+
         @Volatile
         private var instance: SpriteStore? = null;
         fun get(context: Context): SpriteStore = instance ?: synchronized(this) {
