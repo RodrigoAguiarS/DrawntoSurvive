@@ -3,6 +3,7 @@ package com.rodrigo.drawntosurvive.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -10,10 +11,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -21,9 +27,30 @@ import com.rodrigo.drawntosurvive.MainViewModel
 import com.rodrigo.drawntosurvive.data.PlayerProgress
 import com.rodrigo.drawntosurvive.game.*
 
-private enum class Screen{MENU,GAME}
-@Composable fun DrawnToSurviveApp(vm:MainViewModel){var screen by remember{mutableStateOf(Screen.MENU)};var runKey by remember{mutableIntStateOf(0)};val progress by vm.progress.collectAsState();when(screen){Screen.MENU->MainMenu(progress){runKey++;screen=Screen.GAME};Screen.GAME->GameScreen(vm,runKey){screen=Screen.MENU}}}
-@Composable private fun MainMenu(progress:PlayerProgress,onPlay:()->Unit){Box(Modifier.fillMaxSize().background(Color(0xFF17201D)),contentAlignment=Alignment.Center){Column(horizontalAlignment=Alignment.CenterHorizontally){Text("DRAWN TO SURVIVE",style=MaterialTheme.typography.headlineLarge,color=Color(0xFFFFB74D));Spacer(Modifier.height(18.dp));Text("Twin-stick arena survivor",color=Color.White);Spacer(Modifier.height(28.dp));Button(onClick=onPlay){Text("JOGAR")};Spacer(Modifier.height(30.dp));Text("Moedas: ${progress.coins}",color=Color.White);Text("Abates totais: ${progress.totalKills}",color=Color.LightGray);Text("Melhor tempo: ${formatTime(progress.bestTimeSeconds.toFloat())}",color=Color.LightGray)}}}
+private enum class Screen{INTRO,MENU,GAME}
+@Composable fun DrawnToSurviveApp(vm:MainViewModel){var screen by remember{mutableStateOf(Screen.INTRO)};var runKey by remember{mutableIntStateOf(0)};val progress by vm.progress.collectAsState();when(screen){Screen.INTRO->IntroScreen{screen=Screen.MENU};Screen.MENU->MainMenu(progress){runKey++;screen=Screen.GAME};Screen.GAME->GameScreen(vm,runKey){screen=Screen.MENU}}}
+
+@Composable internal fun GameLogo(modifier:Modifier=Modifier,progress:Float=1f){
+    val scale=when{progress<.7f->.85f+(progress/.7f)*.2f;else->1.05f-((progress-.7f)/.3f)*.05f}
+    Column(modifier.graphicsLayer{scaleX=scale;scaleY=scale},horizontalAlignment=Alignment.CenterHorizontally){
+        Text("DRAWN",color=Color(0xFFF5F2E9),fontSize=42.sp,fontWeight=FontWeight.Black,lineHeight=38.sp,letterSpacing=1.sp)
+        Text("TO",color=Color.White,fontSize=17.sp,fontWeight=FontWeight.Black,lineHeight=16.sp)
+        Text("SURVIVE",color=Color(0xFFE34A4F),fontSize=45.sp,fontWeight=FontWeight.Black,lineHeight=43.sp,letterSpacing=.5.sp)
+    }
+}
+
+@Composable private fun MainMenu(progress:PlayerProgress,onPlay:()->Unit){
+    var pressed by remember{mutableStateOf(false)}
+    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF194C31),Color(0xFF092A1B)))),contentAlignment=Alignment.Center){
+        Row(Modifier.fillMaxWidth(.88f),horizontalArrangement=Arrangement.SpaceEvenly,verticalAlignment=Alignment.CenterVertically){
+            Column(horizontalAlignment=Alignment.CenterHorizontally){GameLogo();Spacer(Modifier.height(8.dp));Text("SOBREVIVA O MÁXIMO QUE PUDER",color=Color.White,fontSize=14.sp,fontWeight=FontWeight.ExtraBold,letterSpacing=.6.sp)}
+            Column(horizontalAlignment=Alignment.CenterHorizontally){
+                Box(Modifier.shadow(if(pressed)14.dp else 6.dp,RoundedCornerShape(12.dp)).graphicsLayer{scaleX=if(pressed).96f else 1f;scaleY=if(pressed).96f else 1f}.background(Color(0xFF55BE48),RoundedCornerShape(12.dp)).border(if(pressed)3.dp else 2.dp,if(pressed)Color(0xFFFFE86B)else Color(0xFF102B17),RoundedCornerShape(12.dp)).pointerInput(Unit){detectTapGestures(onPress={pressed=true;val released=tryAwaitRelease();pressed=false;if(released)onPlay()})}.padding(horizontal=54.dp,vertical=17.dp)){Text("▶  JOGAR",color=Color.White,fontSize=23.sp,fontWeight=FontWeight.Black)}
+                Spacer(Modifier.height(20.dp));Text("ESTATÍSTICAS",color=Color.White,fontSize=13.sp,fontWeight=FontWeight.Bold);Spacer(Modifier.height(6.dp));Text("Moedas: ${progress.coins}  •  Abates: ${progress.totalKills}  •  Melhor: ${formatTime(progress.bestTimeSeconds.toFloat())}",color=Color(0xFFD5E3DC),fontSize=12.sp,textAlign=TextAlign.Center)
+            }
+        }
+    }
+}
 @Composable private fun GameScreen(vm:MainViewModel,key:Int,onMenu:()->Unit){val controls=remember(key){TouchController()};val engine=remember(key){vm.newEngine(controls)};val view=remember(key){GameView(vm.getApplication(),engine,controls)};val ui by engine.ui.collectAsState();BackHandler{if(ui.gameState==GameState.RUNNING)engine.command(GameCommand.Pause)else onMenu()};Box(Modifier.fillMaxSize()){AndroidView(factory={view},modifier=Modifier.fillMaxSize());GameHud(ui){engine.command(GameCommand.Pause)};when(ui.gameState){GameState.LEVEL_UP->UpgradeOverlay(ui.upgradeChoices){engine.command(GameCommand.SelectUpgrade(it))};GameState.PAUSED->PauseOverlay({engine.command(GameCommand.Resume)},onMenu);GameState.GAME_OVER,GameState.VICTORY->ResultOverlay(ui,{engine.requestRestart()},onMenu);else->{}}}}
 @Composable
 private fun GameHud(ui:GameUiState,onPause:()->Unit){

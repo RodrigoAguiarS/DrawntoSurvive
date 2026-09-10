@@ -21,6 +21,11 @@ object GameConfig {
     const val DEATH_EFFECT_DURATION = 0.48f
     const val WEAPON_OFFSET = 34f
     const val MUZZLE_OFFSET = 66f
+    const val MUZZLE_FLASH_OFFSET = 72f
+    const val MUZZLE_FLASH_DURATION = 0.08f
+    const val SPECIAL_ANIMATION_DURATION = 0.88f
+    const val SPECIAL_PROJECTILE_FIRE_TIME = 0.44f
+    const val SPECIAL_JUMP_HEIGHT = 28f
     const val CRITICAL_CHANCE = 0.05f
     const val CRITICAL_MULTIPLIER = 2f
     const val SPECIAL_DAMAGE = 40f

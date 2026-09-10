@@ -15,6 +15,10 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
     private val _ui=MutableStateFlow(GameUiState()); val ui:StateFlow<GameUiState> = _ui
     var state=GameState.RUNNING; private set; var elapsed=0f; private set; var kills=0; private set
     var width=1f; var height=1f; private var spawnClock=0f; private var uiClock=0f; private var resultSent=false
+    var muzzleFlashTimer=0f; private set
+    var specialAnimationTimer=0f; private set
+    var specialDirection=Vector2(0f,1f); private set
+    private var specialProjectilesPending=false
     fun resize(w:Int,h:Int){width=w.toFloat();height=h.toFloat();if(player.position.x==0f){player.position.x=width/2;player.position.y=height/2}}
     fun command(c:GameCommand)=commands.add(c)
     fun requestRestart(){GameLog.debug("Replay clicado; state=$state");command(GameCommand.RestartRun)}
@@ -22,8 +26,8 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
     fun update(dtRaw:Float){ processCommands(); if(state!=GameState.RUNNING)return; val dt=min(dtRaw,GameConfig.MAX_DELTA_TIME)
         elapsed+=dt; val i=input.snapshot(); player.moveDirection=i.move; if(i.move.lengthSquared()>0f){player.facingDirection=i.move;player.aimDirection=i.move;player.lastAimDirection=i.move}
         player.position.x=(player.position.x+i.move.x*player.speed*dt).coerceIn(30f,width-30f);player.position.y=(player.position.y+i.move.y*player.speed*dt).coerceIn(65f,height-30f)
-        weapon.currentCooldown-=dt;special.cooldownRemaining-=dt;player.invulnerability-=dt
-        val firePressed=input.consumeFire();if((firePressed||input.isFireHeld())&&weapon.currentCooldown<=0f)fire();if(input.consumeSpecial()&&special.cooldownRemaining<=0f)burst()
+        weapon.currentCooldown-=dt;special.cooldownRemaining-=dt;player.invulnerability-=dt;muzzleFlashTimer=(muzzleFlashTimer-dt).coerceAtLeast(0f);updateSpecial(dt)
+        val firePressed=input.consumeFire();if((firePressed||input.isFireHeld())&&weapon.currentCooldown<=0f)fire();if(input.consumeSpecial()&&special.cooldownRemaining<=0f&&specialAnimationTimer<=0f)startSpecial()
         spawnClock-=dt;if(spawnClock<=0f){spawn();spawnClock=GameMath.spawnInterval(elapsed)}
         updateEnemies(dt);updateProjectiles(dt);collisions();updateOrbs(dt);updateDeathEffects(dt)
         if(player.healthRegenPerSecond>0)player.currentHp=min(player.maxHp,player.currentHp+player.healthRegenPerSecond*dt)
@@ -31,8 +35,9 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
         if(player.currentHp<=0)finish(false) else if(elapsed>=GameConfig.MATCH_DURATION_SECONDS)finish(true)
         uiClock-=dt;if(uiClock<=0){publish();uiClock=.08f}
     }
-    private fun fire(){weapon.currentCooldown=weapon.cooldown;val facing=player.facingDirection.normalized();for(a in GameMath.spreadAngles(weapon.projectilesPerShot,weapon.spreadDegrees)){val d=GameMath.rotate(facing,a);addProjectile(d,weapon.damage,weapon.projectileSpeed,weapon.projectileRadius,weapon.projectileRange)} }
-    private fun burst(){special.cooldownRemaining=special.cooldown;for(d in GameMath.radialDirections(special.projectileCount))addProjectile(d,special.damage,special.projectileSpeed,special.projectileRadius,700f)}
+    private fun fire(){weapon.currentCooldown=weapon.cooldown;muzzleFlashTimer=GameConfig.MUZZLE_FLASH_DURATION;val facing=player.facingDirection.normalized();for(a in GameMath.spreadAngles(weapon.projectilesPerShot,weapon.spreadDegrees)){val d=GameMath.rotate(facing,a);addProjectile(d,weapon.damage,weapon.projectileSpeed,weapon.projectileRadius,weapon.projectileRange)} }
+    private fun startSpecial(){special.cooldownRemaining=special.cooldown;specialAnimationTimer=GameConfig.SPECIAL_ANIMATION_DURATION;specialDirection=player.facingDirection.normalized();specialProjectilesPending=true}
+    private fun updateSpecial(dt:Float){if(specialAnimationTimer<=0f)return;val previousElapsed=GameConfig.SPECIAL_ANIMATION_DURATION-specialAnimationTimer;specialAnimationTimer=(specialAnimationTimer-dt).coerceAtLeast(0f);val elapsed=GameConfig.SPECIAL_ANIMATION_DURATION-specialAnimationTimer;if(specialProjectilesPending&&previousElapsed<GameConfig.SPECIAL_PROJECTILE_FIRE_TIME&&elapsed>=GameConfig.SPECIAL_PROJECTILE_FIRE_TIME){specialProjectilesPending=false;for(d in GameMath.radialDirections(special.projectileCount))addProjectile(d,special.damage,special.projectileSpeed,special.projectileRadius,700f)}}
     private fun addProjectile(d:Vector2,baseDamage:Float,speed:Float,radius:Float,range:Float){if(projectiles.size>=GameConfig.MAX_ENTITIES)return;val crit=Random.nextFloat()<player.criticalChance;val damage=baseDamage*(if(crit)player.criticalMultiplier else 1f);projectiles+=Projectile(player.position+d*GameConfig.MUZZLE_OFFSET,d,speed,damage,radius,range,crit)}
     private fun spawn(){if(enemies.size>=220)return;val count=if(elapsed>360)2 else 1;repeat(count){val side=Random.nextInt(4);val m=GameConfig.SPAWN_MARGIN;val p=when(side){0->Vector2(Random.nextFloat()*width,-m);1->Vector2(width+m,Random.nextFloat()*height);2->Vector2(Random.nextFloat()*width,height+m);else->Vector2(-m,Random.nextFloat()*height)};val r=Random.nextFloat();val type=when{elapsed<60->EnemyType.SLIME;elapsed<180->if(r<.7f)EnemyType.SLIME else EnemyType.FAST;elapsed<360->if(r<.48f)EnemyType.SLIME else if(r<.75f)EnemyType.FAST else EnemyType.SKELETON;elapsed<480->if(r<.4f)EnemyType.SKELETON else if(r<.7f)EnemyType.FAST else EnemyType.SLIME;else->if(r<.55f)EnemyType.SKELETON else if(r<.8f)EnemyType.FAST else EnemyType.SLIME};enemies+=Enemy(p,type,jumpTimer=randomJumpInterval())} }
     private fun randomJumpInterval()=GameConfig.MIN_JUMP_INTERVAL+Random.nextFloat()*(GameConfig.MAX_JUMP_INTERVAL-GameConfig.MIN_JUMP_INTERVAL)
@@ -61,7 +66,7 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
     private fun restartRun(){
         val previous=state;GameLog.debug("restartRun iniciado; state anterior=$previous")
         input.reset();enemies.clear();projectiles.clear();orbs.clear();deathEffects.clear();levels.clear();commands.clear()
-        player=Player(Vector2(width/2f,height/2f));weapon=WeaponStats();special=SpecialStats();elapsed=0f;kills=0;spawnClock=0f;uiClock=0f;resultSent=false;state=GameState.RUNNING
+        player=Player(Vector2(width/2f,height/2f));weapon=WeaponStats();special=SpecialStats();elapsed=0f;kills=0;spawnClock=0f;uiClock=0f;muzzleFlashTimer=0f;specialAnimationTimer=0f;specialDirection=Vector2(0f,1f);specialProjectilesPending=false;resultSent=false;state=GameState.RUNNING
         GameLog.debug("GameEngine resetado; state novo=$state")
     }
     private fun applyUpgrade(t:UpgradeType){levels[t]=(levels[t]?:0)+1;when(t){

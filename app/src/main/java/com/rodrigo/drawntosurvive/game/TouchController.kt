@@ -30,6 +30,7 @@ class TouchController {
     fun consumeFire(): Boolean { val value=fireRequested; fireRequested=false; return value }
     fun isFireHeld(): Boolean = firePointerId >= 0
     fun consumeSpecial(): Boolean { val value=specialRequested; specialRequested=false; return value }
+    internal fun requestSpecial() { specialRequested=true }
     fun onTouch(event: MotionEvent): Boolean {
         val actionIndex=event.actionIndex; val action=event.actionMasked
         when(action) {

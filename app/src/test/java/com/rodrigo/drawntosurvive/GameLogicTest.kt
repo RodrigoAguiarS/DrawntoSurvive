@@ -26,12 +26,19 @@ class GameLogicTest {
   val engine=GameEngine(TouchController()){};engine.resize(1000,600);engine.enemies.clear();val enemy=Enemy(Vector2(300f,300f),EnemyType.SLIME,jumpTimer=.01f);engine.enemies+=enemy
   engine.update(.02f);assertEquals(AnimationState.JUMP,enemy.animationState);engine.update(.1f);assertTrue(enemy.animationTime>.04f);repeat(18){engine.update(.1f)};assertEquals(AnimationState.WALK,enemy.animationState);assertTrue(enemy.jumpTimer>=GameConfig.MIN_JUMP_INTERVAL)
  }
+ @Test fun specialPlaysJumpBeforeFiringRadialProjectiles(){
+  val controls=TouchController();val engine=GameEngine(controls){};engine.resize(1000,600);engine.enemies.clear();engine.projectiles.clear();engine.player.facingDirection=Vector2(-1f,0f)
+  controls.requestSpecial();engine.update(.01f)
+  assertTrue(engine.specialAnimationTimer>0f);assertEquals(0,engine.projectiles.size);assertEquals(-1f,engine.specialDirection.x,.001f)
+  repeat(8){engine.update(.05f)};assertEquals(0,engine.projectiles.size)
+  engine.update(.05f);assertEquals(GameConfig.SPECIAL_PROJECTILE_COUNT,engine.projectiles.size)
+ }
  @Test fun restartResetsRunStateWithoutReplacingEngine(){
   var results=0;val controls=TouchController();val engine=GameEngine(controls){results++};engine.resize(1000,600)
   repeat(3){runIndex->
    engine.player.currentHp=0f;engine.update(.016f);assertEquals(GameState.GAME_OVER,engine.state);assertEquals(runIndex+1,results)
    engine.enemies+=Enemy(Vector2(1f,1f),EnemyType.SLIME);engine.projectiles+=Projectile(Vector2(),Vector2(1f,0f),1f,1f,1f,1f,false);engine.requestRestart();engine.update(.016f)
-   assertEquals(GameState.RUNNING,engine.state);assertEquals(GameConfig.PLAYER_INITIAL_HP,engine.player.currentHp,.001f);assertEquals(0,engine.kills);assertTrue(engine.elapsed<.1f);assertTrue(engine.projectiles.isEmpty())
+   assertEquals(GameState.RUNNING,engine.state);assertEquals(GameConfig.PLAYER_INITIAL_HP,engine.player.currentHp,.001f);assertEquals(0,engine.kills);assertTrue(engine.elapsed<.1f);assertTrue(engine.projectiles.isEmpty());assertEquals(0f,engine.specialAnimationTimer,.001f)
   }
   assertEquals(3,results)
  }
