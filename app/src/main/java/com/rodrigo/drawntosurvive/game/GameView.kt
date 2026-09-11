@@ -51,7 +51,6 @@ class GameView(context: Context, val engine: GameEngine, val controls: TouchCont
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent) = controls.onTouch(event)
-    fun pauseGame() = engine.pause()
     private fun drawFrame() {
         if (!holder.surface.isValid) return;
         val c = try {
@@ -130,7 +129,7 @@ class GameView(context: Context, val engine: GameEngine, val controls: TouchCont
             c,
             pd,
             playerVisualPosition(),
-            94f * density,
+            GameConfig.PLAYER_VISUAL_SIZE * density,
             pflip
         )
         if (specialAnimating) drawSpecialEffect(c); drawWeapon(c); if (engine.muzzleFlashTimer > 0f) drawMuzzleFlash(

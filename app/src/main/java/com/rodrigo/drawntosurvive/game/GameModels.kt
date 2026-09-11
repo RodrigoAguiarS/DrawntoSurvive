@@ -1,9 +1,7 @@
 package com.rodrigo.drawntosurvive.game
 
-import kotlin.math.min
-
-enum class GameState { MENU, RUNNING, LEVEL_UP, PAUSED, GAME_OVER, VICTORY }
-enum class AnimationState { IDLE, WALK, JUMP, DEATH }
+enum class GameState { RUNNING, LEVEL_UP, PAUSED, GAME_OVER, VICTORY }
+enum class AnimationState { IDLE, WALK, JUMP, }
 enum class EnemyRank { NORMAL, ELITE, MINI_BOSS }
 enum class SupplyReward { HEAL, XP, SPECIAL_COOLDOWN, EXPLOSION }
 enum class AreaEffectType { DEATH_EXPLOSION, SUPPLY_EXPLOSION }

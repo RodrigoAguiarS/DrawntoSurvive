@@ -51,7 +51,7 @@ class SpriteStore private constructor(context: Context) {
         frame(hero, direction, if (moving) AnimationState.JUMP else AnimationState.IDLE, time)
 
     fun playerJump(direction: Direction8, progress: Float) =
-        sequenceFrame(hero, direction, "jump", progress)
+        jumpFrame(hero, direction, progress)
 
     fun enemy(type: EnemyType, direction: Direction8, state: AnimationState, time: Float) = frame(
         when (type) {
@@ -76,14 +76,12 @@ class SpriteStore private constructor(context: Context) {
         else -> false
     }
 
-    private fun sequenceFrame(
+    private fun jumpFrame(
         sprites: CharacterSprites,
         direction: Direction8,
-        state: String,
         progress: Float
     ): SpriteFrame {
-        val stateIndex = if (state == "jump") JUMP_INDEX else IDLE_INDEX
-        val frames = sprites.frames[stateIndex][direction.ordinal]
+        val frames = sprites.frames[JUMP_INDEX][direction.ordinal]
         val index = (progress.coerceIn(0f, .999f) * frames.size).toInt()
         return frames.getOrNull(index) ?: EMPTY_FRAME
     }

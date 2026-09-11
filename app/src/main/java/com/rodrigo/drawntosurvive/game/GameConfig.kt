@@ -1,13 +1,12 @@
 package com.rodrigo.drawntosurvive.game
 
 object GameConfig {
-    const val DEBUG_FAST_RUN = false
     const val MATCH_DURATION_SECONDS = 600f
     const val MAX_DELTA_TIME = 0.05f
     const val PLAYER_INITIAL_HP = 100f
     const val PLAYER_SPEED = 230f
     const val PLAYER_COLLISION_RADIUS = 24f
-    const val PLAYER_VISUAL_SIZE = 92f
+    const val PLAYER_VISUAL_SIZE = 94f
     const val PICKUP_RADIUS = 34f
     const val MAGNET_RADIUS = 145f
     const val WEAPON_DAMAGE = 20f
