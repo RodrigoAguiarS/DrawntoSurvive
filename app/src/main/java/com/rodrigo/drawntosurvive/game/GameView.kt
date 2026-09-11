@@ -4,6 +4,8 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.*
 import android.view.*
+import androidx.core.graphics.withScale
+import androidx.core.graphics.withTranslation
 import kotlin.math.atan2
 import kotlin.math.ceil
 import kotlin.math.sin
@@ -11,8 +13,8 @@ import kotlin.math.sin
 @SuppressLint("ViewConstructor")
 class GameView(context: Context, val engine: GameEngine, val controls: TouchController) :
     SurfaceView(context), SurfaceHolder.Callback {
-    private var loop: GameLoop? = null;
-    private val sprites = SpriteStore.get(context);
+    private var loop: GameLoop? = null
+    private val sprites = SpriteStore.get(context)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG);
     private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG);
     private val dst = RectF();
@@ -201,13 +203,12 @@ class GameView(context: Context, val engine: GameEngine, val controls: TouchCont
         val width = projectile.radius * 3.2f
         val height = projectile.radius * 1.8f
         dst.set(-width / 2f, -height / 2f, width / 2f, height / 2f)
-        c.save()
-        c.translate(projectile.position.x, projectile.position.y)
-        c.rotate(angle)
-        bitmapPaint.alpha = 255
-        bitmapPaint.colorFilter = null
-        c.drawBitmap(bullet, null, dst, bitmapPaint)
-        c.restore()
+        c.withTranslation(projectile.position.x, projectile.position.y) {
+            rotate(angle)
+            bitmapPaint.alpha = 255
+            bitmapPaint.colorFilter = null
+            drawBitmap(bullet, null, dst, bitmapPaint)
+        }
     }
 
     private fun drawAreaEffects(c: Canvas) {
@@ -318,7 +319,7 @@ class GameView(context: Context, val engine: GameEngine, val controls: TouchCont
             pos.x + size / 2,
             pos.y + size / 2
         ); if (flip) {
-            c.save(); c.scale(-1f, 1f, pos.x, pos.y); c.drawBitmap(b, null, dst, bitmapPaint); c.restore()
+            c.withScale(-1f, 1f, pos.x, pos.y) { drawBitmap(b, null, dst, bitmapPaint) }
         } else c.drawBitmap(b, null, dst, bitmapPaint)
     }
 
@@ -341,10 +342,8 @@ class GameView(context: Context, val engine: GameEngine, val controls: TouchCont
         val p = engine.player;
         val d = p.facingDirection.normalized();
         val angle = Math.toDegrees(atan2(d.y.toDouble(), d.x.toDouble())).toFloat();
-        val wp = playerVisualPosition() + d * GameConfig.WEAPON_OFFSET; c.save(); c.translate(
-            wp.x,
-            wp.y
-        ); c.rotate(angle);
+        val wp = playerVisualPosition() + d * GameConfig.WEAPON_OFFSET
+        c.save(); c.translate(wp.x, wp.y); c.rotate(angle)
         bitmapPaint.alpha = 255
         bitmapPaint.colorFilter = null
         val b = sprites.gun; if (b != null) c.drawBitmap(
