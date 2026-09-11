@@ -53,11 +53,8 @@ class SpriteStore private constructor(context: Context) {
     fun playerJump(direction: Direction8, progress: Float) =
         jumpFrame(hero, direction, progress)
 
-    fun enemy(type: EnemyType, direction: Direction8, state: AnimationState, time: Float) = frame(
-        when (type) {
-            EnemyType.SLIME -> monster; EnemyType.FAST -> base; EnemyType.SKELETON -> skeleton
-        }, direction, state, time
-    )
+    fun enemy(type: EnemyType, direction: Direction8, state: AnimationState, time: Float) =
+        frame(character(type), direction, state, time)
 
     private fun character(type: EnemyType) = when (type) {
         EnemyType.SLIME -> monster; EnemyType.FAST -> base; EnemyType.SKELETON -> skeleton
