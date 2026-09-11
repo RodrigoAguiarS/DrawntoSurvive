@@ -4,6 +4,9 @@ import kotlin.math.min
 
 enum class GameState { MENU, RUNNING, LEVEL_UP, PAUSED, GAME_OVER, VICTORY }
 enum class AnimationState { IDLE, WALK, JUMP, DEATH }
+enum class EnemyRank { NORMAL, ELITE, MINI_BOSS }
+enum class SupplyReward { HEAL, XP, SPECIAL_COOLDOWN, EXPLOSION }
+enum class AreaEffectType { DEATH_EXPLOSION, SUPPLY_EXPLOSION }
 enum class EnemyType(
     val hp: Float,
     val speed: Float,
@@ -44,7 +47,8 @@ data class Enemy(
     var animationTime: Float = 0f,
     var jumpTimer: Float = GameConfig.MIN_JUMP_INTERVAL,
     var separationX: Float = 0f,
-    var separationY: Float = 0f
+    var separationY: Float = 0f,
+    var rank: EnemyRank = EnemyRank.NORMAL
 )
 
 data class Projectile(
@@ -58,6 +62,21 @@ data class Projectile(
     var distanceTraveled: Float = 0f,
     var active: Boolean = true,
     var previousPosition: Vector2 = position.copy()
+)
+
+data class SupplyCrate(
+    val position: Vector2,
+    val reward: SupplyReward,
+    var active: Boolean = true,
+    var lifeTime: Float = 0f
+)
+
+data class AreaEffect(
+    val position: Vector2,
+    val radius: Float,
+    val type: AreaEffectType,
+    var elapsed: Float = 0f,
+    val duration: Float = GameConfig.AREA_EFFECT_DURATION
 )
 
 data class DeathEffect(
@@ -93,7 +112,7 @@ data class SpecialStats(
     var projectileRadius: Float = GameConfig.SPECIAL_PROJECTILE_RADIUS
 )
 
-enum class UpgradeType { MOVE_SPEED, MAX_HP, REGEN, DAMAGE, FIRE_RATE, PROJECTILE_SPEED, PROJECTILE_SIZE, MULTISHOT, CRITICAL, PICKUP_RANGE, SPECIAL_DAMAGE, SPECIAL_COOLDOWN, SPECIAL_PROJECTILES, SPECIAL_SIZE }
+enum class UpgradeType { MOVE_SPEED, MAX_HP, REGEN, DAMAGE, FIRE_RATE, PROJECTILE_SPEED, PROJECTILE_SIZE, MULTISHOT, CRITICAL, PICKUP_RANGE, SPECIAL_DAMAGE, SPECIAL_COOLDOWN, SPECIAL_PROJECTILES, SPECIAL_SIZE, DEATH_EXPLOSION }
 data class Upgrade(
     val type: UpgradeType,
     val name: String,
@@ -102,11 +121,13 @@ data class Upgrade(
 )
 
 data class UpgradeUiModel(val id: String, val name: String, val description: String, val level: Int)
+data class UpgradeSummaryUiModel(val name: String, val level: Int)
 data class GameUiState(
     val hp: Float = 100f, val maxHp: Float = 100f, val level: Int = 1,
     val experience: Int = 0, val experienceRequired: Int = 20, val elapsedTime: Float = 0f,
     val kills: Int = 0, val gameState: GameState = GameState.RUNNING,
-    val upgradeChoices: List<UpgradeUiModel> = emptyList(), val coinsEarned: Int = 0
+    val upgradeChoices: List<UpgradeUiModel> = emptyList(), val coinsEarned: Int = 0,
+    val collectedUpgrades: List<UpgradeSummaryUiModel> = emptyList()
 )
 
 data class RunResult(
@@ -141,6 +162,7 @@ object UpgradeCatalog {
         Upgrade(UpgradeType.SPECIAL_DAMAGE, "Especial Potente", "+20% dano especial"),
         Upgrade(UpgradeType.SPECIAL_COOLDOWN, "Especial Rápido", "-10% recarga especial"),
         Upgrade(UpgradeType.SPECIAL_PROJECTILES, "Rajada Maior", "+2 projéteis especiais"),
-        Upgrade(UpgradeType.SPECIAL_SIZE, "Explosão Larga", "+15% tamanho especial")
+        Upgrade(UpgradeType.SPECIAL_SIZE, "Explosão Larga", "+15% tamanho especial"),
+        Upgrade(UpgradeType.DEATH_EXPLOSION, "Tinta Instável", "Abates podem explodir inimigos próximos", 3)
     )
 }

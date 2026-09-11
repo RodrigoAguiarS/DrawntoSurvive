@@ -1,6 +1,7 @@
 package com.rodrigo.drawntosurvive.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -191,23 +192,19 @@ private fun GameHud(ui: GameUiState, onPause: () -> Unit) {
             .padding(horizontal = 6.dp, vertical = 5.dp)
     ) {
         val compact = maxWidth < 700.dp
-        PlayerStatusPanel(
-            ui,
-            Modifier
-                .width(if (compact) 190.dp else 230.dp)
-                .align(Alignment.TopStart)
-        )
-        MatchTimer(
-            ui.elapsedTime,
-            Modifier
-                .width(if (compact) 64.dp else 74.dp)
-                .align(Alignment.TopCenter)
-        )
         Row(
             Modifier.align(Alignment.TopEnd),
             horizontalArrangement = Arrangement.spacedBy(5.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            PlayerStatusPanel(
+                ui,
+                Modifier.width(if (compact) 190.dp else 230.dp)
+            )
+            MatchTimer(
+                ui.elapsedTime,
+                Modifier.width(if (compact) 64.dp else 74.dp)
+            )
             KillCounter(ui.kills)
             PauseButton(onPause)
         }
@@ -372,29 +369,119 @@ private val HudGold = Color(0xFFFFC45C)
 @Composable
 private fun UpgradeOverlay(choices: List<UpgradeUiModel>, select: (String) -> Unit) {
     Overlay {
-        Text(
-            "LEVEL UP!",
-            style = MaterialTheme.typography.headlineMedium,
-            color = Color(0xFFFFB74D)
-        ); Text("Escolha uma melhoria", color = Color.White); choices.forEach {
-        Card(
-            onClick = {
-                select(
-                    it.id
-                )
-            },
+        HudPanel(
             Modifier
                 .fillMaxWidth()
-                .padding(vertical = 5.dp)
+                .border(1.dp, HudGold.copy(alpha = .55f), HudShape),
+            horizontal = 14.dp,
+            vertical = 10.dp
         ) {
-            Column(Modifier.padding(15.dp)) {
-                Text(it.name); Text(it.description); Text(
-                "Nível ${it.level}",
-                style = MaterialTheme.typography.labelSmall
+            Text(
+                "LEVEL UP!",
+                Modifier.align(Alignment.CenterHorizontally),
+                color = HudGold,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 1.2.sp,
+                maxLines = 1
             )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                "Escolha uma melhoria",
+                Modifier.align(Alignment.CenterHorizontally),
+                color = HudMuted,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = .4.sp,
+                maxLines = 1
+            )
+        }
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            choices.forEach {
+                UpgradeChoiceCard(
+                    choice = it,
+                    onClick = { select(it.id) },
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
     }
+}
+
+@Composable
+private fun UpgradeChoiceCard(
+    choice: UpgradeUiModel,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier.heightIn(min = 118.dp),
+        shape = HudShape,
+        colors = CardDefaults.cardColors(containerColor = HudSurface),
+        border = BorderStroke(1.dp, HudBorder)
+    ) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 10.dp, vertical = 9.dp)
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    choice.name.uppercase(),
+                    modifier = Modifier.weight(1f),
+                    color = HudText,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = .3.sp,
+                    maxLines = 2
+                )
+                Spacer(Modifier.width(6.dp))
+                UpgradeLevelChip(choice.level)
+            }
+            Spacer(Modifier.height(7.dp))
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(HudBorder)
+            )
+            Spacer(Modifier.height(7.dp))
+            Text(
+                choice.description,
+                color = HudMuted,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+                lineHeight = 13.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun UpgradeLevelChip(level: Int) {
+    Box(
+        Modifier
+            .background(HudExperience.copy(alpha = .18f), RoundedCornerShape(7.dp))
+            .border(1.dp, HudExperience.copy(alpha = .55f), RoundedCornerShape(7.dp))
+            .padding(horizontal = 6.dp, vertical = 3.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            "NV $level",
+            color = HudExperience,
+            fontSize = 8.sp,
+            fontWeight = FontWeight.ExtraBold,
+            maxLines = 1
+        )
     }
 }
 
@@ -411,21 +498,240 @@ private fun PauseOverlay(resume: () -> Unit, menu: () -> Unit) {
 
 @Composable
 private fun ResultOverlay(ui: GameUiState, replay: () -> Unit, menu: () -> Unit) {
+    val victory = ui.gameState == GameState.VICTORY
+    val title = if (victory) "VOCÊ SOBREVIVEU!" else "VOCÊ CAIU..."
+    val titleColor = if (victory) HudExperience else HudCritical
+    val storyLine1 = if (victory) {
+        "Os rabiscos recuaram... por enquanto."
+    } else {
+        "Os rabiscos tomaram conta da página."
+    }
+    val storyLine2 = if (victory) {
+        "Seu traço manteve a página viva até o amanhecer."
+    } else {
+        "Mas cada tentativa deixa um novo traço de esperança."
+    }
+
     Overlay {
+        HudPanel(
+            Modifier
+                .fillMaxWidth()
+                .border(1.dp, titleColor.copy(alpha = .62f), HudShape),
+            horizontal = 14.dp,
+            vertical = 12.dp
+        ) {
+            Text(
+                title,
+                Modifier.align(Alignment.CenterHorizontally),
+                color = titleColor,
+                fontSize = 23.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 1.sp,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                storyLine1,
+                Modifier.align(Alignment.CenterHorizontally),
+                color = HudText,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                storyLine2,
+                Modifier.align(Alignment.CenterHorizontally),
+                color = HudMuted,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center
+            )
+        }
+
+        Column(
+            Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ResultStatCard("TEMPO", formatTime(ui.elapsedTime), HudExperience, Modifier.weight(1f))
+                ResultStatCard("LEVEL", ui.level.toString(), HudGold, Modifier.weight(1f))
+            }
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ResultStatCard("ABATES", ui.kills.toString(), HudText, Modifier.weight(1f))
+                ResultStatCard("MOEDAS", ui.coinsEarned.toString(), HudGold, Modifier.weight(1f))
+            }
+        }
+
+        UpgradeSummaryPanel(ui.collectedUpgrades)
+
+        if (victory) {
+            HudPanel(
+                Modifier.fillMaxWidth(),
+                horizontal = 14.dp,
+                vertical = 10.dp
+            ) {
+                Text(
+                    "CRÉDITOS",
+                    Modifier.align(Alignment.CenterHorizontally),
+                    color = HudGold,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = .8.sp
+                )
+                Spacer(Modifier.height(6.dp))
+                CreditLine("Criado por", "Rodrigo")
+                CreditLine("Desenvolvido com", "Kotlin + Android")
+                CreditLine("", "Obrigado por jogar!")
+            }
+        }
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(onClick = replay) { Text(if (victory) "JOGAR NOVAMENTE" else "TENTAR NOVAMENTE") }
+            OutlinedButton(onClick = menu) { Text("MENU") }
+        }
+    }
+}
+
+@Composable
+private fun ResultStatCard(
+    label: String,
+    value: String,
+    accent: Color,
+    modifier: Modifier = Modifier
+) {
+    HudPanel(modifier, horizontal = 10.dp, vertical = 8.dp) {
         Text(
-            if (ui.gameState == GameState.VICTORY) "VOCÊ SOBREVIVEU!" else "GAME OVER",
-            style = MaterialTheme.typography.headlineMedium,
-            color = if (ui.gameState == GameState.VICTORY) Color(0xFF43E5A9) else Color(0xFFFF6B6B)
-        ); Text(
-        "Tempo: ${formatTime(ui.elapsedTime)}",
-        color = Color.White
-    ); Text(
-        "Level: ${ui.level}   Abates: ${ui.kills}",
-        color = Color.White
-    ); Text(
-        "Moedas ganhas: ${ui.coinsEarned}",
-        color = Color(0xFFFFB74D)
-    ); Button(onClick = replay) { Text("JOGAR NOVAMENTE") }; OutlinedButton(onClick = menu) { Text("MENU") }
+            label,
+            Modifier.align(Alignment.CenterHorizontally),
+            color = HudMuted,
+            fontSize = 8.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = .5.sp,
+            maxLines = 1
+        )
+        Spacer(Modifier.height(3.dp))
+        Text(
+            value,
+            Modifier.align(Alignment.CenterHorizontally),
+            color = accent,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.ExtraBold,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun UpgradeSummaryPanel(upgrades: List<UpgradeSummaryUiModel>) {
+    HudPanel(
+        Modifier.fillMaxWidth(),
+        horizontal = 14.dp,
+        vertical = 10.dp
+    ) {
+        Text(
+            "MELHORIAS DA RUN",
+            Modifier.align(Alignment.CenterHorizontally),
+            color = HudGold,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = .8.sp
+        )
+        Spacer(Modifier.height(6.dp))
+        if (upgrades.isEmpty()) {
+            Text(
+                "Nenhuma melhoria coletada",
+                Modifier.align(Alignment.CenterHorizontally),
+                color = HudMuted,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center
+            )
+        } else {
+            val visibleUpgrades = upgrades.sortedByDescending { it.level }.take(8)
+            visibleUpgrades.forEach { UpgradeSummaryRow(it) }
+            val hiddenCount = upgrades.size - visibleUpgrades.size
+            if (hiddenCount > 0) {
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    "+$hiddenCount melhorias adicionais",
+                    Modifier.align(Alignment.CenterHorizontally),
+                    color = HudMuted,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpgradeSummaryRow(upgrade: UpgradeSummaryUiModel) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            upgrade.name,
+            modifier = Modifier.weight(1f),
+            color = HudText,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1
+        )
+        Spacer(Modifier.width(8.dp))
+        Box(
+            Modifier
+                .background(HudExperience.copy(alpha = .16f), RoundedCornerShape(7.dp))
+                .border(1.dp, HudExperience.copy(alpha = .48f), RoundedCornerShape(7.dp))
+                .padding(horizontal = 6.dp, vertical = 2.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                "NV ${upgrade.level}",
+                color = HudExperience,
+                fontSize = 8.sp,
+                fontWeight = FontWeight.ExtraBold,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+private fun CreditLine(label: String, value: String) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = if (label.isBlank()) Arrangement.Center else Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (label.isNotBlank()) {
+            Text(
+                label,
+                color = HudMuted,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+        Text(
+            value,
+            color = HudText,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = if (label.isBlank()) TextAlign.Center else TextAlign.End
+        )
     }
 }
 

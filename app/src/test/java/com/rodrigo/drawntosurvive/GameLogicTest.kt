@@ -43,6 +43,17 @@ class GameLogicTest {
   repeat(8){engine.update(.05f)};assertEquals(0,engine.projectiles.size)
   engine.update(.05f);assertEquals(GameConfig.SPECIAL_PROJECTILE_COUNT,engine.projectiles.size)
  }
+ @Test fun supplyCrateHealUsesExistingPickupFlow(){
+  val engine=GameEngine(TouchController()){};engine.resize(1000,600);engine.enemies.clear();engine.supplyCrates.clear();engine.player.currentHp=40f
+  engine.supplyCrates+=SupplyCrate(engine.player.position.copy(),SupplyReward.HEAL);engine.update(.016f)
+  assertEquals(68f,engine.player.currentHp,.001f);assertTrue(engine.supplyCrates.isEmpty())
+ }
+ @Test fun supplyCrateExplosionDamagesNearbyEnemies(){
+  val engine=GameEngine(TouchController()){};engine.resize(1000,600);engine.enemies.clear();engine.supplyCrates.clear()
+  engine.enemies+=Enemy(Vector2(engine.player.position.x+40f,engine.player.position.y),EnemyType.SLIME)
+  engine.supplyCrates+=SupplyCrate(engine.player.position.copy(),SupplyReward.EXPLOSION);engine.update(.016f)
+  assertEquals(1,engine.kills);assertTrue(engine.areaEffects.isNotEmpty())
+ }
  @Test fun restartResetsRunStateWithoutReplacingEngine(){
   var results=0;val controls=TouchController();val engine=GameEngine(controls){results++};engine.resize(1000,600)
   repeat(3){runIndex->

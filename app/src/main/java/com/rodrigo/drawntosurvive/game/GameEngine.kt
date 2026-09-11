@@ -14,6 +14,8 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
     val projectiles = mutableListOf<Projectile>();
     val orbs = mutableListOf<ExperienceOrb>();
     val deathEffects = mutableListOf<DeathEffect>()
+    val supplyCrates = mutableListOf<SupplyCrate>()
+    val areaEffects = mutableListOf<AreaEffect>()
     private val commands = ConcurrentLinkedQueue<GameCommand>();
     private val levels = mutableMapOf<UpgradeType, Int>()
     private val enemyGrid = SpatialGrid(GameConfig.SPATIAL_GRID_CELL_SIZE)
@@ -25,6 +27,9 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
     var width = 1f;
     var height = 1f;
     private var spawnClock = 0f;
+    private var supplyCrateClock = GameConfig.SUPPLY_CRATE_FIRST_SPAWN_TIME
+    private var eliteClock = GameConfig.ELITE_FIRST_SPAWN_TIME
+    private var miniBossClock = GameConfig.MINI_BOSS_FIRST_SPAWN_TIME
     private var uiClock = 0f;
     private var resultSent = false
     var muzzleFlashTimer = 0f; private set
@@ -66,12 +71,15 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
         spawnClock -= dt; if (spawnClock <= 0f) {
             spawn(); spawnClock = GameMath.spawnInterval(elapsed)
         }
+        updateTimedSpawns(dt)
         rebuildEnemyGrid()
         updateEnemies(dt)
         rebuildEnemyGrid()
         updateProjectiles(dt)
         collisions()
         updateOrbs(dt)
+        updateSupplyCrates(dt)
+        updateAreaEffects(dt)
         updateDeathEffects(dt)
         if (player.healthRegenPerSecond > 0) player.currentHp =
             min(player.maxHp, player.currentHp + player.healthRegenPerSecond * dt)
@@ -148,6 +156,83 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
         )
     }
 
+    private fun updateTimedSpawns(dt: Float) {
+        supplyCrateClock -= dt
+        if (supplyCrateClock <= 0f) {
+            spawnSupplyCrate()
+            supplyCrateClock = GameConfig.SUPPLY_CRATE_INTERVAL
+        }
+        eliteClock -= dt
+        if (eliteClock <= 0f) {
+            spawnRankedEnemy(EnemyRank.ELITE)
+            eliteClock = GameConfig.ELITE_SPAWN_INTERVAL
+        }
+        miniBossClock -= dt
+        if (miniBossClock <= 0f) {
+            spawnRankedEnemy(EnemyRank.MINI_BOSS)
+            miniBossClock = GameConfig.MINI_BOSS_SPAWN_INTERVAL
+        }
+    }
+
+    private fun spawnSupplyCrate() {
+        if (supplyCrates.size >= 3) return
+        val x = Random.nextFloat() * (width - 140f).coerceAtLeast(1f) + 70f
+        val y = Random.nextFloat() * (height - 150f).coerceAtLeast(1f) + 75f
+        val reward = SupplyReward.entries[Random.nextInt(SupplyReward.entries.size)]
+        supplyCrates += SupplyCrate(Vector2(x, y), reward)
+    }
+
+    private fun spawnRankedEnemy(rank: EnemyRank) {
+        if (enemies.size >= GameConfig.MAX_ENEMIES) return
+        val side = Random.nextInt(4)
+        val m = GameConfig.SPAWN_MARGIN
+        val p = when (side) {
+            0 -> Vector2(Random.nextFloat() * width, -m)
+            1 -> Vector2(width + m, Random.nextFloat() * height)
+            2 -> Vector2(Random.nextFloat() * width, height + m)
+            else -> Vector2(-m, Random.nextFloat() * height)
+        }
+        val type = if (rank == EnemyRank.MINI_BOSS) EnemyType.SKELETON else EnemyType.entries.random()
+        enemies += Enemy(
+            p,
+            type,
+            hp = type.hp * enemyHpMultiplier(rank),
+            jumpTimer = randomJumpInterval(),
+            rank = rank
+        )
+    }
+
+    private fun enemyScale(rank: EnemyRank) = when (rank) {
+        EnemyRank.NORMAL -> 1f
+        EnemyRank.ELITE -> GameConfig.ELITE_SCALE
+        EnemyRank.MINI_BOSS -> GameConfig.MINI_BOSS_SCALE
+    }
+
+    private fun enemyRadius(enemy: Enemy) = enemy.type.radius * enemyScale(enemy.rank)
+
+    private fun enemyHpMultiplier(rank: EnemyRank) = when (rank) {
+        EnemyRank.NORMAL -> 1f
+        EnemyRank.ELITE -> GameConfig.ELITE_HP_MULTIPLIER
+        EnemyRank.MINI_BOSS -> GameConfig.MINI_BOSS_HP_MULTIPLIER
+    }
+
+    private fun enemyDamageMultiplier(rank: EnemyRank) = when (rank) {
+        EnemyRank.NORMAL -> 1f
+        EnemyRank.ELITE -> GameConfig.ELITE_DAMAGE_MULTIPLIER
+        EnemyRank.MINI_BOSS -> GameConfig.MINI_BOSS_DAMAGE_MULTIPLIER
+    }
+
+    private fun enemyXpMultiplier(rank: EnemyRank) = when (rank) {
+        EnemyRank.NORMAL -> 1
+        EnemyRank.ELITE -> GameConfig.ELITE_XP_MULTIPLIER
+        EnemyRank.MINI_BOSS -> GameConfig.MINI_BOSS_XP_MULTIPLIER
+    }
+
+    private fun deathExplosionChance(): Float {
+        val level = levels[UpgradeType.DEATH_EXPLOSION] ?: 0
+        return GameConfig.DEATH_EXPLOSION_BASE_CHANCE * level
+    }
+
     private fun spawn() {
         if (enemies.size >= GameConfig.MAX_ENEMIES) return;
         val count = if (elapsed > 360) 2 else 1; repeat(count) {
@@ -191,7 +276,7 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
             val a = enemies[i]
             if (!a.active) continue
             val searchRadius =
-                (a.type.radius + MAX_ENEMY_RADIUS) * GameConfig.ENEMY_SEPARATION_RADIUS_MULTIPLIER
+                (enemyRadius(a) + MAX_ENEMY_RADIUS) * GameConfig.ENEMY_SEPARATION_RADIUS_MULTIPLIER
             enemyGrid.forEachNearby(a.position.x, a.position.y, searchRadius) { j ->
                 if (j <= i) return@forEachNearby
                 val b = enemies[j]
@@ -199,7 +284,7 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
                 var dx = a.position.x - b.position.x
                 var dy = a.position.y - b.position.y
                 val desired =
-                    (a.type.radius + b.type.radius) * GameConfig.ENEMY_SEPARATION_RADIUS_MULTIPLIER
+                    (enemyRadius(a) + enemyRadius(b)) * GameConfig.ENEMY_SEPARATION_RADIUS_MULTIPLIER
                 val desiredSq = desired * desired
                 var distanceSq = dx * dx + dy * dy
                 if (distanceSq >= desiredSq) return@forEachNearby
@@ -260,8 +345,7 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
                 if (hitIndex >= 0 && index >= hitIndex) return@forEachInBounds
                 val enemy = enemies[index]
                 if (!enemy.active) return@forEachInBounds
-                val hitRadius =
-                    enemy.type.radius + p.radius + GameConfig.PROJECTILE_COLLISION_PADDING
+                val hitRadius = enemyRadius(enemy) + p.radius + GameConfig.PROJECTILE_COLLISION_PADDING
                 if (GameMath.segmentHitsCircle(
                         p.previousPosition.x,
                         p.previousPosition.y,
@@ -287,14 +371,15 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
                         player.position,
                         GameConfig.PLAYER_COLLISION_RADIUS,
                         enemy.position,
-                        enemy.type.radius
+                        enemyRadius(enemy)
                     )
                 ) {
                     hitIndex = index
                 }
             }
             if (hitIndex >= 0) {
-                player.currentHp -= enemies[hitIndex].type.damage
+                val enemy = enemies[hitIndex]
+                player.currentHp -= enemy.type.damage * enemyDamageMultiplier(enemy.rank)
                 player.invulnerability = GameConfig.INVULNERABILITY_TIME
             }
         }
@@ -314,10 +399,42 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
                 height + GameConfig.SPAWN_MARGIN
             )
         if (enemy.hp <= 0f) {
-            enemy.active = false
-            kills++
-            deathEffects += DeathEffect(enemy.position.copy())
-            orbs += ExperienceOrb(enemy.position.copy(), enemy.type.xp)
+            killEnemy(enemy)
+        }
+    }
+
+    private fun killEnemy(enemy: Enemy) {
+        if (!enemy.active) return
+        enemy.active = false
+        kills++
+        deathEffects += DeathEffect(enemy.position.copy())
+        orbs += ExperienceOrb(enemy.position.copy(), enemy.type.xp * enemyXpMultiplier(enemy.rank))
+        if (Random.nextFloat() < deathExplosionChance()) {
+            applyAreaDamage(
+                enemy.position.x,
+                enemy.position.y,
+                GameConfig.DEATH_EXPLOSION_RADIUS,
+                GameConfig.DEATH_EXPLOSION_DAMAGE,
+                AreaEffectType.DEATH_EXPLOSION
+            )
+        }
+        if (enemy.rank != EnemyRank.NORMAL && Random.nextFloat() < .75f) {
+            supplyCrates += SupplyCrate(enemy.position.copy(), SupplyReward.entries.random())
+        }
+    }
+
+    private fun applyAreaDamage(x: Float, y: Float, radius: Float, damage: Float, type: AreaEffectType) {
+        areaEffects += AreaEffect(Vector2(x, y), radius, type)
+        val radiusSq = radius * radius
+        enemyGrid.forEachNearby(x, y, radius + MAX_ENEMY_RADIUS) { index ->
+            val enemy = enemies[index]
+            if (!enemy.active) return@forEachNearby
+            val dx = enemy.position.x - x
+            val dy = enemy.position.y - y
+            if (dx * dx + dy * dy <= radiusSq) {
+                enemy.hp -= damage
+                if (enemy.hp <= 0f) killEnemy(enemy)
+            }
         }
     }
 
@@ -329,6 +446,8 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
         removeIf(enemies) { !it.active }
         removeIf(projectiles) { !it.active }
         removeIf(orbs) { !it.active }
+        removeIf(supplyCrates) { !it.active }
+        removeIf(areaEffects) { it.elapsed >= it.duration }
         removeIf(deathEffects) { it.elapsed >= it.duration }
     }
 
@@ -348,6 +467,10 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
         for (effect in deathEffects) effect.elapsed += dt
     }
 
+    private fun updateAreaEffects(dt: Float) {
+        for (effect in areaEffects) effect.elapsed += dt
+    }
+
     private fun updateOrbs(dt: Float) {
         for (o in orbs) if (o.active) {
             val delta = player.position - o.position;
@@ -357,6 +480,39 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
                 val d =
                     delta.normalized(); o.position.x += d.x * 330f * dt; o.position.y += d.y * 330f * dt
             }
+        }
+    }
+
+    private fun updateSupplyCrates(dt: Float) {
+        for (crate in supplyCrates) if (crate.active) {
+            crate.lifeTime += dt
+            if (GameMath.circlesCollide(
+                    player.position,
+                    GameConfig.PLAYER_COLLISION_RADIUS,
+                    crate.position,
+                    GameConfig.SUPPLY_CRATE_RADIUS
+                )
+            ) {
+                collectSupplyCrate(crate)
+            }
+        }
+    }
+
+    private fun collectSupplyCrate(crate: SupplyCrate) {
+        crate.active = false
+        when (crate.reward) {
+            SupplyReward.HEAL -> player.currentHp =
+                min(player.maxHp, player.currentHp + GameConfig.SUPPLY_CRATE_HEAL)
+
+            SupplyReward.XP -> gainXp(GameConfig.SUPPLY_CRATE_XP)
+            SupplyReward.SPECIAL_COOLDOWN -> special.cooldownRemaining = 0f
+            SupplyReward.EXPLOSION -> applyAreaDamage(
+                crate.position.x,
+                crate.position.y,
+                GameConfig.SUPPLY_CRATE_REWARD_EXPLOSION_RADIUS,
+                GameConfig.SUPPLY_CRATE_REWARD_EXPLOSION_DAMAGE,
+                AreaEffectType.SUPPLY_EXPLOSION
+            )
         }
     }
 
@@ -399,9 +555,11 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
 
     private fun restartRun() {
         val previous = state; GameLog.debug("restartRun iniciado; state anterior=$previous")
-        input.reset(); enemies.clear(); projectiles.clear(); orbs.clear(); deathEffects.clear(); levels.clear(); commands.clear()
+        input.reset(); enemies.clear(); projectiles.clear(); orbs.clear(); deathEffects.clear(); supplyCrates.clear(); areaEffects.clear(); levels.clear(); commands.clear()
         player = Player(Vector2(width / 2f, height / 2f)); weapon = WeaponStats(); special =
-            SpecialStats(); elapsed = 0f; kills = 0; spawnClock = 0f; uiClock =
+            SpecialStats(); elapsed = 0f; kills = 0; spawnClock = 0f; supplyCrateClock =
+            GameConfig.SUPPLY_CRATE_FIRST_SPAWN_TIME; eliteClock = GameConfig.ELITE_FIRST_SPAWN_TIME; miniBossClock =
+            GameConfig.MINI_BOSS_FIRST_SPAWN_TIME; uiClock =
             0f; muzzleFlashTimer = 0f; specialAnimationTimer = 0f; specialDirection =
             Vector2(0f, 1f); specialProjectilesPending = false; resultSent = false; state =
             GameState.RUNNING
@@ -425,6 +583,7 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
                 max(GameConfig.MIN_SPECIAL_COOLDOWN, special.cooldown * .9f)
 
             UpgradeType.SPECIAL_PROJECTILES -> special.projectileCount += 2; UpgradeType.SPECIAL_SIZE -> special.projectileRadius *= 1.15f
+            UpgradeType.DEATH_EXPLOSION -> {}
         }
     }
 
@@ -453,8 +612,15 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
             kills,
             state,
             choices,
-            if (resultSent) GameMath.coins(kills, state == GameState.VICTORY) else 0
+            if (resultSent) GameMath.coins(kills, state == GameState.VICTORY) else 0,
+            collectedUpgradeSummary()
         )
+
+    private fun collectedUpgradeSummary(): List<UpgradeSummaryUiModel> =
+        UpgradeCatalog.all.mapNotNull { upgrade ->
+            val level = levels[upgrade.type] ?: return@mapNotNull null
+            UpgradeSummaryUiModel(upgrade.name, level)
+        }
 
     private fun publishIfChanged() {
         val next = snapshot()
@@ -466,6 +632,6 @@ class GameEngine(private val input: TouchController, private val onResult: (RunR
     }
 
     private companion object {
-        val MAX_ENEMY_RADIUS = EnemyType.entries.maxOf { it.radius }
+        val MAX_ENEMY_RADIUS = EnemyType.entries.maxOf { it.radius } * GameConfig.MINI_BOSS_SCALE
     }
 }
