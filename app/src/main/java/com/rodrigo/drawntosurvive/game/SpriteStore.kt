@@ -11,13 +11,13 @@ class SpriteStore private constructor(context: Context) {
 
     private val assets = context.assets
     val background = load("images/cenario.png")
-    val gun = load("images/Sprites/gun.png");
+    val gun = load("images/Sprites/gun.png")
     val bullet = load("images/Sprites/bullet.png")
     val deathFrames = (1..7).mapNotNull { load("images/Sprites/Death FX/deathFX ($it).png") }
     val jumpEffectFrames = (1..8).mapNotNull { load("images/Sprites/Jump FX/jumpFX ($it).png") }
-    private val hero = loadCharacter("Hero");
+    private val hero = loadCharacter("Hero")
     private val monster = loadCharacter("Monster")
-    private val skeleton = loadCharacter("Skeleton");
+    private val skeleton = loadCharacter("Skeleton")
     private val base = loadCharacter("Base Character")
     private fun load(path: String): Bitmap? = try {
         assets.open(path).use { BitmapFactory.decodeStream(it) }
@@ -103,7 +103,7 @@ class SpriteStore private constructor(context: Context) {
         private val EMPTY_FRAME = SpriteFrame(null, false)
 
         @Volatile
-        private var instance: SpriteStore? = null;
+        private var instance: SpriteStore? = null
         fun get(context: Context): SpriteStore = instance ?: synchronized(this) {
             instance ?: SpriteStore(context.applicationContext).also { instance = it }
         }
